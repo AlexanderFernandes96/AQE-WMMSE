@@ -52,47 +52,7 @@ class EncoderLayer(nn.Module):
         self.Nc_enc = Nc_enc
         ## height: Hout = floor((Hin + 2*padding[0] - dilation[0]*(kernel_size[0]-1) - 1)/stride[0] + 1)
         ## width:  Wout = floor((Win + 2*padding[1] - dilation[1]*(kernel_size[1]-1) - 1)/stride[1] + 1)
-        # self.cnn_encoder = nn.Sequential(
-        #     nn.Conv2d(1, 64, 3, padding=0, bias=False), # 8 = 10 + 2*0 - (3-1)
-        #     nn.BatchNorm2d(64),
-        #     nn.ReLU(),
-        #     nn.Conv2d(64, 128, 3, padding=0, bias=False), # 6
-        #     nn.BatchNorm2d(128),
-        #     nn.ReLU(),
-        #     nn.Conv2d(128, 256, 3, padding=0, bias=False), # 4
-        #     nn.BatchNorm2d(256),
-        #     nn.ReLU(),
-        #     nn.Conv2d(256, 512, 3, padding=0, bias=False), # 2
-        #     nn.BatchNorm2d(512),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(2, 2),
-        # )
         p = 0.5 # dropout probability
-        # self.linear_encoder = nn.Sequential(
-        #     # nn.Linear(2*(K_UE*M_AP + K_UE*N_RIS + N_RIS*M_AP + K_UE*M_AP) + N_RIS + 512, 2048),
-        #     nn.Linear(2*(K_UE*M_AP + K_UE*N_RIS + N_RIS*M_AP + K_UE*M_AP) + N_RIS, 2048),
-        #     # nn.Linear(2*(K_UE*M_AP + K_UE*N_RIS + N_RIS*M_AP), 2048),
-        #     nn.ReLU(),
-        #     # nn.Dropout(p),
-        #     nn.BatchNorm1d(2048),
-        #     nn.Linear(2048, 1024),
-        #     nn.ReLU(),
-        #     # nn.Dropout(p),
-        #     nn.BatchNorm1d(1024),
-        #     nn.Linear(1024, 512),
-        #     nn.ReLU(),
-        #     # nn.Dropout(p),
-        #     nn.BatchNorm1d(512),
-        #     nn.Linear(512, 256),
-        #     nn.ReLU(),
-        #     # nn.Dropout(p),
-        #     nn.BatchNorm1d(256),
-        #     nn.Linear(256, 128),
-        #     nn.ReLU(),
-        #     # nn.Dropout(p),
-        #     nn.BatchNorm1d(128),
-        #     nn.Linear(128, Nc_enc + 2*K_UE*M_AP),
-        # )
         H = N_RIS + 2 * K_UE * M_AP
         self.linear_encoder = nn.Sequential(
             nn.Linear(2*(K_UE*M_AP + K_UE*N_RIS + N_RIS*M_AP + K_UE*M_AP) + N_RIS, 32*H),
@@ -125,17 +85,7 @@ class EncoderLayer(nn.Module):
         hur_i = torch.flatten(x[6], 1).float()
         hua_r = torch.flatten(x[7], 1).float()
         hua_i = torch.flatten(x[8], 1).float()
-        # theta_rec = torch.reshape(theta, (-1, 1, trainparams['Nw_RIS'], trainparams['Nh_RIS'])).float()
-        # theta_cnn = self.cnn_encoder(theta_rec)
-        # theta_cnn = torch.flatten(theta_cnn, start_dim=1)
-        # x_in = torch.cat((theta_cnn, theta, w_r, w_i, hra_r, hra_i, hur_r, hur_i, hua_r, hua_i), 1)
         x_in = torch.cat((theta, w_r, w_i, hra_r, hra_i, hur_r, hur_i, hua_r, hua_i), 1)
-        # x_in = torch.cat((hra_r, hra_i, hur_r, hur_i, hua_r, hua_i), 1)
-        # x_out = self.linear_encoder(x_in)
-        # theta_enc = x_out[:, 0:self.Nc_enc]
-        # Wr = x_out[:, self.Nc_enc:self.Nc_enc+(self.K_UE*self.M_AP)]
-        # Wi = x_out[:, self.Nc_enc+(self.K_UE*self.M_AP):self.Nc_enc+2*(self.K_UE*self.M_AP)]
-        # return theta_enc, Wr, Wi
         theta_enc = self.linear_encoder(x_in)
         return theta_enc
 
@@ -256,22 +206,6 @@ class DecoderLayer(nn.Module):
             nn.Linear(N_RIS, N_RIS),
             nn.ReLU(),
         )
-        # self.cnn_decoder = nn.Sequential(
-        #     nn.Upsample(scale_factor=2),
-        #     nn.ConvTranspose2d(N_RIS, 64, 3, padding=0),
-        #     nn.ReLU(),
-        #     nn.BatchNorm2d(64),
-        #     nn.ConvTranspose2d(64, 32, 3, padding=0),
-        #     nn.ReLU(),
-        #     nn.BatchNorm2d(32),
-        #     nn.ConvTranspose2d(32, 16, 3, padding=0),
-        #     nn.ReLU(),
-        #     nn.BatchNorm2d(16),
-        #     nn.ConvTranspose2d(16, 1, 3, padding=0),
-        #     nn.ReLU(),
-        #     nn.BatchNorm2d(1),
-        # )
-        # self.reshape_dim = (N_RIS, 1, 1)
         self.out_layer = nn.Sequential(
             nn.Linear(N_RIS, N_RIS), # best to make output layer a linear operator
             # nn.LeakyReLU(), # LeakyReLU or ReLU will make negative phase shifts not work
@@ -280,12 +214,8 @@ class DecoderLayer(nn.Module):
 
     def forward(self, theta_qnt):
         theta_dec = self.linear_decoder(theta_qnt)
-        # theta_cnn = self.cnn_decoder(theta_dec.view(theta_dec.size(0), *self.reshape_dim))
-        # theta_cnn = torch.flatten(theta_cnn, start_dim=1)
-        # theta_out = self.out_layer(theta_cnn)
         theta_out = self.out_layer(theta_dec)
         return theta_out
-        # return torch.angle(torch.exp(1j * theta_out))
 
 
 class WupdateLayer(nn.Module):
@@ -295,27 +225,6 @@ class WupdateLayer(nn.Module):
         self.M_AP = M_AP
         p = 0.5 # dropout probability
         self.linear_W = nn.Sequential(
-            # nn.Linear(4*K_UE*M_AP + 2*N_RIS + 2*(K_UE*M_AP + K_UE*N_RIS + N_RIS*M_AP), 1024),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(1024),
-            # nn.Linear(1024, 512),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(512),
-            # nn.Linear(512, 256),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(256),
-            # nn.Linear(256, 128),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(128),
-            # nn.Linear(128, 64),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(64),
-            # nn.Linear(64, 2*K_UE*M_AP),
             nn.Linear(4*K_UE*M_AP, 4*K_UE*M_AP),
             nn.ReLU(),
             nn.Dropout(p),
@@ -328,27 +237,6 @@ class WupdateLayer(nn.Module):
             nn.Linear(4*K_UE*M_AP, 2*K_UE*M_AP),
         )
         self.linear_UL = nn.Sequential(
-            # nn.Linear(4*K_UE*M_AP + 2*N_RIS + 2*(K_UE*M_AP + K_UE*N_RIS + N_RIS*M_AP), 1024),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(1024),
-            # nn.Linear(1024, 512),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(512),
-            # nn.Linear(512, 256),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(256),
-            # nn.Linear(256, 128),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(128),
-            # nn.Linear(128, 64),
-            # nn.ReLU(),
-            # nn.Dropout(p),
-            # nn.BatchNorm1d(64),
-            # nn.Linear(64, 3*K_UE)
             nn.Linear(4*K_UE*M_AP, 4*K_UE*M_AP),
             nn.ReLU(),
             nn.Dropout(p),
@@ -398,24 +286,11 @@ class WupdateLayer(nn.Module):
         # hua_r = torch.flatten(x[7], 1).float()
         # hua_i = torch.flatten(x[8], 1).float()
 
-        # x_in = torch.cat((W_r, W_i, h_r, h_i, theta_r, theta_i, hra_r, hra_i, hur_r, hur_i, hua_r, hua_i), 1)
-        # x_in = torch.cat((theta_opt, Wr_opt, Wi_opt, W_r, W_i, h_r, h_i), 1)
-        # x_in = torch.cat((Wr_opt, Wi_opt, W_r, W_i, h_r, h_i), 1)
-        # x_in = torch.cat((W_in_r, W_in_i, h_r, h_i), 1)
         x_in = torch.cat((Wr_opt, Wi_opt, h_r, h_i), 1)
         W_lin = self.linear_W(x_in)
         Wr = W_lin[:, 0*self.K_UE*self.M_AP:1*self.K_UE*self.M_AP]
         Wi = W_lin[:, 1*self.K_UE*self.M_AP:2*self.K_UE*self.M_AP]
-        # W = Wr + 1j*Wi
-        # W = torch.reshape(W, (-1, self.M_AP, self.K_UE))
-        # normfactor = torch.linalg.matrix_norm(W, ord='fro')
-        # W = (10 ** (trainparams['snr_dB'] / 10)) * W / normfactor[:, None, None] # normalize W
-        # Wr = torch.flatten(torch.real(W), 1)
-        # Wi = torch.flatten(torch.imag(W), 1)
 
-        # UL_in = torch.cat((Wr, Wi, h_r, h_i, theta_r, theta_i, hra_r, hra_i, hur_r, hur_i, hua_r, hua_i), 1)
-        # UL_in = torch.cat((theta_opt, Wr_opt, Wi_opt, Wr, Wi, h_r, h_i), 1)
-        # UL_in = torch.cat((Wr_opt, Wi_opt, Wr, Wi, h_r, h_i), 1)
         UL_in = torch.cat((Wr, Wi, h_r, h_i), 1)
         UL_out = self.linear_UL(UL_in)
         Ur = UL_out[:, 0*self.K_UE:1*self.K_UE]
@@ -510,14 +385,11 @@ class AutoQEncoder(nn.Module):
         self.decoder_layer = DecoderLayer(N_RIS, Nc_enc).to(dev)
         self.w_update_layer = WupdateLayer(K_UE, M_AP).to(dev)
     def forward(self, x):
-        # theta_enc, Wr, Wi = self.encoder_layer(x)
         theta_enc = self.encoder_layer(x)
         theta_qnt = self.quantizer_layer(theta_enc)
         theta_dec = self.decoder_layer(theta_qnt)
-        # Wr_u, Wi_u = self.w_update_layer(theta_dec, Wr, Wi, x)
         Wr_u, Wi_u = self.w_update_layer(theta_dec, x)
         W = Wr_u + 1j*Wi_u
-        # W = torch.reshape(W, (-1, self.M_AP, self.K_UE))
         theta_out, W_out = normalizethetaW(theta_dec, W)
         return theta_out.double(), W_out.cdouble()
 
@@ -530,7 +402,6 @@ class AutoQEncoderNoWupdate(nn.Module):
         self.quantizer_layer = QuantizerLayer(C_code_words, dev).to(dev)
         self.decoder_layer = DecoderLayer(N_RIS, Nc_enc).to(dev)
     def forward(self, x):
-        # theta_enc, Wr, Wi = self.encoder_layer(x)
         theta_enc = self.encoder_layer(x)
         theta_qnt = self.quantizer_layer(theta_enc)
         theta_dec = self.decoder_layer(theta_qnt)
@@ -587,9 +458,6 @@ class LinearQuantizer(nn.Module):
         self.encoder_layer = nn.Linear(N_RIS, Nc_enc).to(dev)
         self.quantizer_layer = QuantizerLayer(C_code_words, dev).to(dev)
         self.decoder_layer = nn.Linear(Nc_enc, N_RIS).to(dev)
-        # self.encoder_layer = nn.Identity(N_RIS, Nc_enc).to(dev)
-        # self.quantizer_layer = QuantizerLayer(C_code_words).to(dev)
-        # self.decoder_layer = nn.Identity(Nc_enc, N_RIS).to(dev)
     def forward(self, x):
         theta   = x[0].float()
         theta_enc = self.encoder_layer(theta.float())
@@ -649,8 +517,6 @@ def batchSumRate(theta, W, Hau, Har, Hru):
     return torch.einsum("bk -> b", R)
 
 def Loss(theta, W, Hau, Har, Hru):
-    # dist = torch.angle(torch.exp(1j * (theta - theta_opt)))
-    # return torch.mean(torch.abs(dist)) - torch.sum(batchSumRate(theta, W, Hau, Har, Hru))
     return -torch.sum(batchSumRate(theta, W, Hau, Har, Hru))
 
 class Trainer(object):
@@ -1108,18 +974,6 @@ if __name__ == "__main__":
     print(results_df.to_string(), flush=True)
     print('Saving results to:', results_dir + results_file, flush=True)
     results_df.to_csv(results_dir + results_file, sep='\t', encoding='utf-8', index=False, header=True)
-
-    # fig, ax = plt.subplots()
-    # ax.plot(Nc_array, R_opt_array, label='P_opt')
-    # ax.plot(Nc_array, R_AQE_array, label='P_AQE')
-    # ax.plot(Nc_array, R_linQ_array, label='P_linQ')
-    # ax.plot(Nc_array, R_rand_array, label='P_rand')
-    # ax.set_xlabel('Nc')
-    # ax.set_ylabel('Receive Power (dB)')
-    # ax.set_xscale('log', base=2)
-    # ax.legend()
-    # plt.show(block=True)
-    # # plt.interactive(False)
 
 
     ################################################################################################################
