@@ -1,6 +1,6 @@
-# A-Deep-Learning-Architecture-for-Joint-RIS-Phase-Shift-Compression-and-WMMSE-Beamforming
+# Model-based Deep Learning for Joint RIS Phase Shift Compression and WMMSE Beamforming
 Source code for the research paper:
-*A Deep Learning Architecture for Joint RIS Phase Shift Compression and WMMSE Beamforming.*
+[Model-based Deep Learning for Joint RIS Phase Shift Compression and WMMSE Beamforming](https://arxiv.org/abs/2510.05438)
 
 
 ### Required
