@@ -1,18 +1,12 @@
 from copy import deepcopy
 import numpy as np
 import pandas
-import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 import torch.optim as optim
 from tqdm import tqdm
 import pandas as pd
-from tabulate import tabulate
-import matplotlib.pyplot as plt
 import torch
-# from ray import tune
-# from ray.tune.search.optuna import OptunaSearch
-# from ray.tune.schedulers import ASHAScheduler
 import pprint
 import sys
 from pathlib import Path
@@ -71,8 +65,7 @@ class EncoderLayer(nn.Module):
             nn.ReLU(),
             nn.Dropout(p),
             nn.BatchNorm1d(4*H),
-            # nn.Linear(4*H, Nc_enc + 2*K_UE*M_AP), # include W
-            nn.Linear(4*H, Nc_enc), # don't include W
+            nn.Linear(4*H, Nc_enc),
         )
 
     def forward(self, x):
@@ -150,21 +143,16 @@ class QuantizerLayer(nn.Module):
         self.b = torch.nn.Parameter(
             data=torch.from_numpy(
                 np.delete(spacing,[0,-1])
-                # np.random.rand(C_code_words - 1, 1) * 2 * np.pi - 3 * np.pi),
             ), requires_grad=True)
         c_slope = 0.5
-        # c_slope = 10
         if len(self.b) > 1:
             self.c = torch.nn.Parameter(
-                # data=torch.from_numpy((15 / np.mean(np.diff(self.b.data.numpy()))) * np.ones(C_code_words - 1)),
                 data=torch.from_numpy((c_slope * 2 * np.pi / np.mean(np.diff(self.b.data.numpy())) ) * np.ones(C_code_words - 1)),
-                # data=torch.from_numpy(0.9 * np.ones(C_code_words - 1)),
                 requires_grad=True)
         else:
             self.b = torch.nn.Parameter(data=torch.from_numpy(np.zeros(C_code_words - 1)), requires_grad=True)
             self.c = torch.nn.Parameter(
                 data=torch.from_numpy(c_slope * np.ones(C_code_words - 1)),
-                # data=torch.from_numpy(15 / np.pi * np.ones(C_code_words - 1)),
                 requires_grad=True)
         self.C_code_words = C_code_words
         self.hardQ = False
@@ -249,7 +237,6 @@ class WupdateLayer(nn.Module):
             nn.Linear(4*K_UE*M_AP, 3*K_UE),
         )
 
-    # def forward(self, theta, W_r, W_i, x):
     def forward(self, theta, x):
         # Solving optimal wmmse parameters with deep learning inspired by:
         #  [1] W. Xia, G. Zheng, Y. Zhu, J. Zhang, J. Wang, and A. P. Petropulu, “A deep learning framework for
@@ -257,17 +244,6 @@ class WupdateLayer(nn.Module):
         #  doi: 10.1109/TCOMM.2019.2960361.
 
         theta_c = torch.exp(1j * theta) # complex
-        # W_in = W_r + 1j*W_i
-        # W_in = torch.reshape(W_in, (-1, self.M_AP, self.K_UE))
-        # normfactor = torch.linalg.matrix_norm(W_in, ord='fro')
-        # W_in = (10 ** (trainparams['snr_dB'] / 10)) * W_in / normfactor[:, None, None] # normalize W
-        # W_in_r = torch.flatten(torch.real(W_in), start_dim=1)
-        # W_in_i = torch.flatten(torch.imag(W_in), start_dim=1)
-        # W_in_r = W_r
-        # W_in_i = W_i
-        # theta_r = torch.real(theta_c)
-        # theta_i = torch.imag(theta_c)
-        # theta_opt = x[0].float()
         Wr_opt = torch.flatten(x[1].float(), start_dim=1)
         Wi_opt = torch.flatten(x[2].float(), start_dim=1)
         Har = x[3].float() + 1j*x[4].float()
@@ -278,13 +254,6 @@ class WupdateLayer(nn.Module):
         H = Hau + torch.einsum("bkn, bnm -> bkm", Hru, torch.einsum("bn, bnm -> bnm", theta_c, Har))
         h_r = torch.flatten(torch.real(H), start_dim=1)
         h_i = torch.flatten(torch.imag(H), start_dim=1)
-
-        # hra_r = torch.flatten(x[3], 1).float()
-        # hra_i = torch.flatten(x[4], 1).float()
-        # hur_r = torch.flatten(x[5], 1).float()
-        # hur_i = torch.flatten(x[6], 1).float()
-        # hua_r = torch.flatten(x[7], 1).float()
-        # hua_i = torch.flatten(x[8], 1).float()
 
         x_in = torch.cat((Wr_opt, Wi_opt, h_r, h_i), 1)
         W_lin = self.linear_W(x_in)
@@ -313,8 +282,6 @@ class WupdateLayer(nn.Module):
             Lk = L[:,k]
             W_out[:, :, k] = Uk[:,None] * Lk[:,None] * torch.linalg.solve(S, torch.conj(H[:,k,:]))
 
-        # normfactor = torch.linalg.matrix_norm(W_out, ord='fro')
-        # W_out = W_out / normfactor[:, None, None] # normalize W
         Wr_out = torch.real(W_out)
         Wi_out = torch.imag(W_out)
 
@@ -375,9 +342,9 @@ class ACFNetDecoderNetwork(nn.Module):
 # Inspired by: N. Shlezinger and Y. C. Eldar, “Deep task-based quantization,” Entropy, vol. 23, no. 1, pp. 1–18, Jan.
 # 2021, doi: 10.3390/e23010104.
 # Code: https://github.com/arielamar123/ADC-Learning-hyperopt
-class AutoQEncoder(nn.Module):
+class AutoQEncoderWMMSE(nn.Module):
     def __init__(self, K_UE, M_AP, N_RIS, Nc_enc, C_code_words, dev):
-        super(AutoQEncoder, self).__init__()
+        super(AutoQEncoderWMMSE, self).__init__()
         self.K_UE = K_UE
         self.M_AP = M_AP
         self.encoder_layer = EncoderLayer(K_UE, M_AP, N_RIS, Nc_enc).to(dev)
@@ -542,7 +509,7 @@ class Trainer(object):
         val_loss_min = np.inf
         val_loss_min_earlystop = np.inf
 
-        model_validated = deepcopy(self.model)  # if val loss does not decrease, return the copy of AQEnet before training
+        model_validated = deepcopy(self.model)  # if val loss does not decrease, return the copy of AQEWMMSEnet before training
         train_losses = []
         val_losses = []
         num_epochs = 0
@@ -601,9 +568,8 @@ class Trainer(object):
                         print('### Validation loss same/decreased ({:.10f} --> {:.10f})... saving model. ###'.format(
                             val_loss_min, val_loss), flush=True)
                     val_loss_min = val_loss
-                    model_validated = deepcopy(self.model) # if val loss does not decrease, return the copy of AQEnet before training
-                # else:
-                #     self.model = AQEnet_not_trained
+                    model_validated = deepcopy(self.model) # if val loss does not decrease, return the copy of AQEWMMSEnet before training
+
                 running_loss += val_loss
                 if epoch % trainparams['epoch_val'] == trainparams['epoch_val']-1:
                     if running_loss < val_loss_min_earlystop:
@@ -633,7 +599,7 @@ class Trainer(object):
         test_size = len(test_loader.dataset.data)
         self.model.eval()
         with torch.no_grad():
-            # replace trainable tanh quantization layer with proper quantization layer
+            # replace trainable tanh quantization layer with sign quantization layer
             try:
                 self.model.quantizer_layer.hardQ = True
             except AttributeError:
@@ -642,7 +608,7 @@ class Trainer(object):
             for i, data in tqdm(enumerate(test_loader), disable=DISABLE_TQDM):
                 input, theta_opt, Wopt, Hau, Har, Hru = data
                 batchsize = theta_opt.shape[0]
-                theta_model, W_model = self.model(input)  # forward pass inputs into AQE network
+                theta_model, W_model = self.model(input)
                 theta_rand = torch.rand(size=(batchsize,N_RIS), dtype=torch.double, device=self.device) * 2*torch.pi - torch.pi
 
                 R_opt       += torch.sum(batchSumRate(theta_opt, Wopt, Hau, Har, Hru))
@@ -690,10 +656,10 @@ if __name__ == "__main__":
     # Training trainparams
     ####################################################################################################################
     trainparams = {'train_test_split': 0.8, # split between train/test data
-                  'train_val_split': 0.8,  # after the train/test split, split train data into train/val data
-                  'lr': 0.001, #10**(-1*np.random.uniform(2, 5)), # optimizer learning rate
+                  'train_val_split': 0.8, # after the train/test split, split train data into train/val data
+                  'lr': 0.001, # optimizer learning rate
                   # 'momentum': 0.9, # optimizer momentum for SGD
-                  'batch_size': 128, #2**np.random.randint(7, 11), # batch training size
+                  'batch_size': 128, # batch training size
                   'epochs': 1000,  # total training duration
                   'epoch_val': 50, # validate early stop every epoch number
                   'epoch_patience': 20, # number of epochs before loss decrease
@@ -703,15 +669,7 @@ if __name__ == "__main__":
                   'Q_bits': 1, # number of bits of a quantizer
                   # 'max_lr': 1, # maximum learning rate for Scheduler
                   }
-    # for all numpy random generators, the range is: [low, high) where the low value is included but the high value is excluded.
 
-
-    # print('Using OneCycleLR Scheduler, with SGD.')
-    print('Using ADAM with learning rate decay')
-
-    # Nc_array = 2**np.array(range(1,8))
-    # Nc_array = [8,16,32,64,100,128]
-    # Nc_array = [100]
     Nc_array = 10 * np.array(range(1,11))
 
     num_dirs = 1 # number of directories to use which includes data samples
@@ -812,13 +770,13 @@ if __name__ == "__main__":
     print('Train & Test')
     print('------------')
     R_opt_array = np.zeros(len(Nc_array))
-    R_AQE_array = np.zeros(len(Nc_array))
+    R_AQEWMMSE_array = np.zeros(len(Nc_array))
     R_AQEnoW_array = np.zeros(len(Nc_array))
     R_ACF_array = np.zeros(len(Nc_array))
     R_DQNN_array = np.zeros(len(Nc_array))
     R_linQ_array = np.zeros(len(Nc_array))
     R_opt_rand_array = np.zeros(len(Nc_array))
-    R_AQE_rand_array = np.zeros(len(Nc_array))
+    R_AQEWMMSE_rand_array = np.zeros(len(Nc_array))
     R_AQEnoW_rand_array = np.zeros(len(Nc_array))
     R_ACF_rand_array = np.zeros(len(Nc_array))
     R_DQNN_rand_array = np.zeros(len(Nc_array))
@@ -834,17 +792,17 @@ if __name__ == "__main__":
         test_loader = DataLoader(test_set, batch_size=trainparams['batch_size'])
         val_loader = DataLoader(val_set, batch_size=trainparams['batch_size'])
 
-        AQEnet = AutoQEncoder(trainparams['K_UE'], trainparams['M_AP'], trainparams['N_RIS'], trainparams['Nc_enc'], trainparams['C_code_words'], device)
+        AQEWMMSEnet = AutoQEncoderWMMSE(trainparams['K_UE'], trainparams['M_AP'], trainparams['N_RIS'], trainparams['Nc_enc'], trainparams['C_code_words'], device)
         AQEnoWnet = AutoQEncoderNoWupdate(trainparams['K_UE'], trainparams['M_AP'], trainparams['N_RIS'], trainparams['Nc_enc'], trainparams['C_code_words'], device)
         ACFnet = ACFNet(trainparams['K_UE'], trainparams['M_AP'], trainparams['N_RIS'], trainparams['Nc_enc'], trainparams['C_code_words'], device)
         if trainparams['Nc_enc'] == trainparams['N_RIS']:
             dqnn = DQNN(trainparams['K_UE'], trainparams['M_AP'], trainparams['N_RIS'], trainparams['C_code_words'], device)
         linQ = LinearQuantizer(trainparams['K_UE'], trainparams['M_AP'], trainparams['N_RIS'], trainparams['Nc_enc'], trainparams['C_code_words'], device)
 
-        AQEtrainer = Trainer(train_loader, trainparams, AQEnet, device)
-        total_params = sum(p.numel() for p in AQEtrainer.model.parameters())
-        print('AQE Number of parameters:', total_params, flush=True)
-        print(AQEtrainer.model, flush=True)
+        AQEWMMSEtrainer = Trainer(train_loader, trainparams, AQEWMMSEnet, device)
+        total_params = sum(p.numel() for p in AQEWMMSEtrainer.model.parameters())
+        print('AQEWMMSE Number of parameters:', total_params, flush=True)
+        print(AQEWMMSEtrainer.model, flush=True)
 
         AQEnoWtrainer = Trainer(train_loader, trainparams, AQEnoWnet, device)
         total_params = sum(p.numel() for p in AQEnoWtrainer.model.parameters())
@@ -867,15 +825,15 @@ if __name__ == "__main__":
         print('linQ Number of parameters:', total_params, flush=True)
         print(linQtrainer.model, flush=True)
 
-        AQEnet,     AQEnet_train_losses,    AQEnet_val_losses,  AQEnet_num_epochs   = AQEtrainer.train(val_loader, trainparams)
+        AQEWMMSEnet,     AQEWMMSEnet_train_losses,    AQEWMMSEnet_val_losses,  AQEWMMSEnet_num_epochs   = AQEWMMSEtrainer.train(val_loader, trainparams)
         AQEnoWnet,     AQEnoWnet_train_losses,    AQEnoWnet_val_losses,  AQEnoWnet_num_epochs   = AQEnoWtrainer.train(val_loader, trainparams)
         ACFnet,     ACFnet_train_losses,    ACFnet_val_losses,  ACFnet_num_epochs   = ACFtrainer.train(val_loader, trainparams)
         if trainparams['Nc_enc'] == trainparams['N_RIS']:
             dqnn,       DQNNnet_train_losses,   DQNNnet_val_losses, DQNNnet_num_epochs  = dqnntrainer.train(val_loader, trainparams)
         linQ,       linQ_train_losses,      linQ_val_losses,    linQ_num_epochs     = linQtrainer.train(val_loader, trainparams)
 
-        d_AQE = {"train": AQEnet_train_losses, "val": AQEnet_val_losses}
-        AQE_loss_df = pandas.DataFrame(d_AQE)
+        d_AQEWMMSE = {"train": AQEWMMSEnet_train_losses, "val": AQEWMMSEnet_val_losses}
+        AQEWMMSE_loss_df = pandas.DataFrame(d_AQEWMMSE)
         d_AQEnoW = {"train": AQEnoWnet_train_losses, "val": AQEnoWnet_val_losses}
         AQEnoW_loss_df = pandas.DataFrame(d_AQEnoW)
         d_ACF = {"train": ACFnet_train_losses, "val": ACFnet_val_losses}
@@ -887,8 +845,8 @@ if __name__ == "__main__":
         linQ_loss_df = pandas.DataFrame(d_linQ)
 
         loss_file = "loss" + str(i) + ".csv"
-        print("Saving losses to:", results_dir + "AQE_" + loss_file, flush=True)
-        AQE_loss_df.to_csv(results_dir + "AQE_" + loss_file, sep='\t', encoding='utf-8', index=False, header=True)
+        print("Saving losses to:", results_dir + "AQEWMMSE_" + loss_file, flush=True)
+        AQEWMMSE_loss_df.to_csv(results_dir + "AQEWMMSE_" + loss_file, sep='\t', encoding='utf-8', index=False, header=True)
         print("Saving losses to:", results_dir + "AQEnoW_" + loss_file, flush=True)
         AQEnoW_loss_df.to_csv(results_dir + "AQEnoW_" + loss_file, sep='\t', encoding='utf-8', index=False, header=True)
         print("Saving losses to:", results_dir + "ACF_" + loss_file, flush=True)
@@ -899,7 +857,7 @@ if __name__ == "__main__":
         print("Saving losses to:", results_dir + "linQ_" + loss_file, flush=True)
         linQ_loss_df.to_csv(results_dir + "linQ_" + loss_file, sep='\t', encoding='utf-8', index=False, header=True)
 
-        R_opt, R_opt_rand, R_AQE, R_AQE_rand = AQEtrainer.evaluate(test_loader, trainparams)
+        R_opt, R_opt_rand, R_AQEWMMSE, R_AQEWMMSE_rand = AQEWMMSEtrainer.evaluate(test_loader, trainparams)
         R_opt, R_opt_rand, R_AQEnoW, R_AQEnoW_rand = AQEnoWtrainer.evaluate(test_loader, trainparams)
         R_opt, R_opt_rand, R_ACF, R_ACF_rand = ACFtrainer.evaluate(test_loader, trainparams)
         if trainparams['Nc_enc'] == trainparams['N_RIS']:
@@ -911,14 +869,14 @@ if __name__ == "__main__":
         pprint.pprint(trainparams)
         print('Achievable Rate (bps/Hz) using RIS phase shifts with Transmit power SNR {:.2f} dB:'.format(trainparams['snr_dB']), flush=True)
         print('optimum:   ', R_opt, flush=True)
-        print('AQE net:   ', R_AQE, flush=True)
+        print('AQEWMMSE net:   ', R_AQEWMMSE, flush=True)
         print('AQEnoW net:   ', R_AQEnoW, flush=True)
         print('ACF net:   ', R_ACF, flush=True)
         if trainparams['Nc_enc'] == trainparams['N_RIS']:
             print('DQNN net:  ', R_DQNN, flush=True)
         print('linQ net:  ', R_linQ, flush=True)
         print('opt rand:  ', R_opt_rand, flush=True)
-        print('AQE rand:  ', R_AQE_rand, flush=True)
+        print('AQEWMMSE rand:  ', R_AQEWMMSE_rand, flush=True)
         print('AQEnoW rand:  ', R_AQEnoW_rand, flush=True)
         print('ACF rand:  ', R_ACF_rand, flush=True)
         if trainparams['Nc_enc'] == trainparams['N_RIS']:
@@ -926,28 +884,19 @@ if __name__ == "__main__":
         print('linQ rand: ', R_linQ_rand, flush=True)
         print("-------------------------------------------------------------------------------------------------------\n\n")
         R_opt_array[i] = R_opt
-        R_AQE_array[i] = R_AQE
+        R_AQEWMMSE_array[i] = R_AQEWMMSE
         R_AQEnoW_array[i] = R_AQEnoW
         R_ACF_array[i] = R_ACF
         if trainparams['Nc_enc'] == trainparams['N_RIS']:
             R_DQNN_array[i] = R_DQNN
         R_linQ_array[i] = R_linQ
         R_opt_rand_array[i] = R_opt_rand
-        R_AQE_rand_array[i] = R_AQE_rand
+        R_AQEWMMSE_rand_array[i] = R_AQEWMMSE_rand
         R_AQEnoW_rand_array[i] = R_AQEnoW_rand
         R_ACF_rand_array[i] = R_ACF_rand
         if trainparams['Nc_enc'] == trainparams['N_RIS']:
             R_DQNN_rand_array[i] = R_DQNN_rand
         R_linQ_rand_array[i] = R_linQ_rand
-
-        # x_vals, soft_quant, hard_quant = linQ.quantizer_layer.plot_vals()
-        # fig, ax = plt.subplots()
-        # ax.plot(x_vals, soft_quant, label='Soft Quantizer')
-        # ax.plot(x_vals, hard_quant, label='Hard Quantizer', linestyle='--')
-        # ax.set_title("Quantizer Values: bits = " + str(bits))
-        # ax.legend()
-        # plt.show(block=True)
-        # # plt.interactive(False)
 
         trainparamslist.append(deepcopy(trainparams))
 
@@ -958,13 +907,13 @@ if __name__ == "__main__":
 
     d = {'Nc': Nc_array,
          'R_opt': R_opt_array,
-         'R_AQE': R_AQE_array,
+         'R_AQEWMMSE': R_AQEWMMSE_array,
          'R_AQEnoW': R_AQEnoW_array,
          'R_ACF': R_ACF_array,
          'R_DQNN': R_DQNN_array,
          'R_linQ': R_linQ_array,
          'R_opt_rand': R_opt_rand_array,
-         'R_AQE_rand': R_AQE_rand_array,
+         'R_AQEWMMSE_rand': R_AQEWMMSE_rand_array,
          'R_AQEnoW_rand': R_AQEnoW_rand_array,
          'R_ACF_rand': R_ACF_rand_array,
          'R_DQNN_rand': R_DQNN_rand_array,
