@@ -8,6 +8,7 @@ addpath("src")
 systemModelParameters
 
 job_id = 0;
+% job_id = str2num(getenv("SLURM_ARRAY_TASK_ID"));
 dataDir = "datasets/HDRISData/40PdBm/";
 % rng(job_id)
 dataDir = dataDir + num2str(job_id) + "/";

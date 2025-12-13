@@ -625,27 +625,92 @@ class Trainer(object):
         return R_opt.item(), R_opt_rand.item(), R.item(), R_rand.item()
 
 
+
+# run in parallel example using slurm commands: srun python -u mumiso_autoencoder_quantization.py $SLURM_ARRAY_TASK_ID
 if __name__ == "__main__":
     print('------------')
     print('Start Script')
     print('------------')
 
-    PdBm_dir = '40PdBm/'
-    path_dir = "MATLAB/"
-    trial = "00"
-    dataset_dir = path_dir + "datasets/HDRISData/" + PdBm_dir
-    results_dir = path_dir + "logs/MU-MISO_AchievableRateExperiments/" + trial + "/" + PdBm_dir
+    ################################################################################################################################################
+    # - All deep learning python modules were written in this one file to make experimentation easier.
+    # - All data samples were generated using MATLAB code (located in: MATLAB/) then saved into .csv files.
+    # - To save file space of this online code repository, you will need to generate the dataset yourself then setup the directory structure of the
+    #   generated dataset shown below.
+    # - Modify "MATLAB/src/systemModelParameters.m" to set the system model parameters.
+    # - Run "MATLAB/generateHDRISData.m" to generate dataset samples based on the system model parameters.
+    #
+    # After running "MATLAB/generateHDRISData.m" multiple times, setup the directory structure of the dataset samples like this:
+    # /path_dir/
+    # |-- datasets/HDRISData/MUMISO/
+    #     |-- 10PdBm/
+    #     |   |-- 0/                              <--- when you run generateHDRISData.m it will generate the following files:
+    #     |       |-- beamforming.csv             <--- beamforming, Har, Hau, Hru, RISopt, wopt .csv files contain a number of MonteCarlo runs
+    #     |       |-- Har_i.csv
+    #     |       |-- Har_r.csv
+    #     |       |-- Hau_i.csv
+    #     |       |-- Hau_r.csv
+    #     |       |-- HDRISData.mat               <--- MATLAB matrix file
+    #     |       |-- HDRISData.txt               <--- MATLAB logs that were used to generate the dataset
+    #     |       |-- Hru_i.csv
+    #     |       |-- Hru_r.csv
+    #     |       |-- RISopt.csv
+    #     |       |-- systemModelParameters.csv   <--- information such as number of MonteCarlo runs per file can be found here
+    #     |       |-- wopt_i.csv
+    #     |       |-- wopt_r.csv
+    #     |   |-- 1/                              <--- use sbatch commands (super computer) to generate multiple datasets in parallel
+    #     |   |-- 2/                              <--- for example: "#SBATCH --array=0-24" can create 25 parallel "SLURM_ARRAY_TASK_ID" job IDs
+    #     |   |-- 3/
+    #     |   |-- 4/
+    #     |   | ...
+    #     |   |-- 24/                             <--- use the "num_dirs" variable in this python file to control how many directories to load
+    #     |       |-- beamforming.csv
+    #     |       |-- Har_i.csv
+    #     |       |-- Har_r.csv
+    #     |       |-- Hau_i.csv
+    #     |       |-- Hau_r.csv
+    #     |       |-- HDRISData.mat
+    #     |       |-- HDRISData.txt
+    #     |       |-- Hru_i.csv
+    #     |       |-- Hru_r.csv
+    #     |       |-- RISopt.csv
+    #     |       |-- systemModelParameters.csv   <--- generating multiple datasets in parallel will have the same system model parameters
+    #     |       |-- wopt_i.csv
+    #     |       |-- wopt_r.csv
+    #     |-- 15PdBm/                             <--- you can change the transmit power in the "MATLAB/src/systemModelParameters.m" file
+    #     |-- 20PdBm/
+    #     |-- 25PdBm/
+    #     |-- 30PdBm/
+    #     |-- 35PdBm/
+    #     |-- 40PdBm/
+    # The systemModelParameters.csv file in each directory contains the variables:
+    # LOS, K, M, N, Nw, Nh, d_ra, a_ra, d_ur, a_ur, d_ua, a_ua, g_ur, g_ra, g_ua, CH_err, PdBm, NdBm, SNRdB, max_AO_iterations, mc_runs
+    ################################################################################################################################################
+
+    PdBm_list = ['10PdBm', '15PdBm', '20PdBm', '25PdBm', '30PdBm', '35PdBm', '40PdBm']
+    if len(sys.argv) > 1:
+        PdBm_dir = PdBm_list[int(sys.argv[1])]
+    else:
+        PdBm_dir = '40PdBm'
+
+    path_dir = "~/scratch/"
+    # path_dir = "MATLAB/"
+    trial = "08" # trial number for logging results
+    dataset_dir = path_dir + "datasets/HDRISData/MUMISO/" + PdBm_dir + "/"
+    results_dir = path_dir + "logs/MU-MISO_AchievableRateExperiments/" + trial + "/" + PdBm_dir + "/"
     # if len(sys.argv) > 1:
     #     results_dir = results_dir + sys.argv[1] + "/"
     results_file = "results.csv"
     trainparams_file = "trainparams.csv"
+
+    num_dirs = 1 # number of directories to load (which includes the data samples), if data was not generated in parallel keep this at 1.
 
     print("results directory:", results_dir)
     Path(path_dir).mkdir(parents=True, exist_ok=True)
     Path(results_dir).mkdir(parents=True, exist_ok=True)
 
     # Make print statements go to file instead of stdout:
-    if path_dir == "/home/alex96/scratch/":
+    if path_dir == "~/scratch/":
         orig_stdout = sys.stdout
         orig_stderr = sys.stderr
         f_python_output = open(results_dir + "python_log.out", 'w')
@@ -671,8 +736,6 @@ if __name__ == "__main__":
                   }
 
     Nc_array = 10 * np.array(range(1,11))
-
-    num_dirs = 1 # number of directories to use which includes data samples
 
     ####################################################################################################################
     # Load RIS data from .csv files
@@ -932,7 +995,7 @@ if __name__ == "__main__":
     print('End Script')
     print('----------')
 
-    if path_dir == "/home/alex96/scratch/":
+    if path_dir == "~/scratch/":
         sys.stdout = orig_stdout
         f_python_output.close()
         sys.stderr = orig_stderr
