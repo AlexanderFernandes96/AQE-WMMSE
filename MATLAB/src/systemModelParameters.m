@@ -1,5 +1,5 @@
 %% Parameters
-mc_runs = 10; % Monte Carlo runs are used to create dataset samples. Currently set to a low number, change as accordingly.
+mc_runs = 4000;
 % M = 8;  % AP
 % K = 6;  % Users
 % Nw = 8;
@@ -17,7 +17,7 @@ K = 3;  % Users
 Nw = 10;
 Nh = 10;
 N = Nw*Nh; % Number of RIS elements
-LOS = 100; % Number of LOS paths
+LOS = 10; % Number of LOS paths
 B = N+1; % Number of RIS transmission blocks
 PdBm = 40;
 NdBm = -170*180/1000; % -170 dBm/Hz noise power spectral density 180 kHz bandwidth
@@ -35,6 +35,23 @@ pl = @(d,a) -30*d^-a;
 g_ur = -pl(d_ur,a_ur); % User-RIS gain
 g_ra = -pl(d_ra,a_ra); % RIS-AP gain
 g_ua = -pl(d_ua,a_ua); % Direct-Path gain
-CH_err = 0; %10^(-50/10);
+% CH_err = 0;
+CH_err = 10^(-45/10);
+% CH_err = 10^(-30/10);
 max_AO_iterations = 100;
 
+% Generate pilot scheme based on energy or power constraint: use E or P
+% pilot_scheme = "S1P"; % Scheme 1: Simultaneous transmission
+% pilot_scheme = "S2P"; % Scheme 2: Nonsimultaneous transmission
+
+% B_list = N+1:-1:25;
+% B_list = N+1:-1:35;
+% B_list = N+1:-1:13;
+% B_list = N+1:-1:7;
+% B_list = N-10:-1:N-10;
+% SNRdB_list = 0:5:30;
+% SNRdB_list = 0:5:40;
+% Nw_list = 2:1:5;
+% Nh_list = Nw_list;
+% Nh_list = 10.*ones(1,length(Nw_list));
+% N_list = Nw_list .* Nh_list;
