@@ -695,8 +695,8 @@ if __name__ == "__main__":
 
     path_dir = "~/scratch/"
     # path_dir = "MATLAB/"
-    trial = "08" # trial number for logging results
-    dataset_dir = path_dir + "datasets/HDRISData/MUMISO/" + PdBm_dir + "/"
+    trial = "CSIerr0/repeated_trial_00/00" # trial number for logging results
+    dataset_dir = path_dir + "datasets/HDRISData/MUMISO_CSIerr0/" + PdBm_dir + "/"
     results_dir = path_dir + "logs/MU-MISO_AchievableRateExperiments/" + trial + "/" + PdBm_dir + "/"
     # if len(sys.argv) > 1:
     #     results_dir = results_dir + sys.argv[1] + "/"
@@ -764,37 +764,61 @@ if __name__ == "__main__":
     # Har = (N, M)    AP  -> RIS
     # Hru = (K, N)    RIS -> UE
     # W   = (M, K)    UE stream -> AP
-    Hau = torch.zeros(trainparams['mc_runs'], trainparams['K_UE']*trainparams['M_AP'], dtype=torch.cdouble)
-    Har = torch.zeros(trainparams['mc_runs'], trainparams['N_RIS']*trainparams['M_AP'], dtype=torch.cdouble)
-    Hru = torch.zeros(trainparams['mc_runs'], trainparams['K_UE']*trainparams['N_RIS'], dtype=torch.cdouble)
+    Hau_err = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['M_AP'],
+                          dtype=torch.cdouble)  # CSI errors
+    Har_err = torch.zeros(trainparams['mc_runs'], trainparams['N_RIS'] * trainparams['M_AP'], dtype=torch.cdouble)
+    Hru_err = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['N_RIS'], dtype=torch.cdouble)
+    Hau = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['M_AP'], dtype=torch.cdouble)
+    Har = torch.zeros(trainparams['mc_runs'], trainparams['N_RIS'] * trainparams['M_AP'], dtype=torch.cdouble)
+    Hru = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['N_RIS'], dtype=torch.cdouble)
     RISopt = torch.zeros(trainparams['mc_runs'], trainparams['N_RIS'], dtype=torch.double)
-    Wopt = torch.zeros(trainparams['mc_runs'], trainparams['M_AP']*trainparams['K_UE'], dtype=torch.cdouble)
+    Wopt = torch.zeros(trainparams['mc_runs'], trainparams['M_AP'] * trainparams['K_UE'], dtype=torch.cdouble)
 
     for d in range(num_dirs):
         print(dataset_dir + str(d) + "/", flush=True)
         sp = pd.read_csv(dataset_dir + str(d) + "/" + "systemModelParameters.csv").iloc[0]
+        print('Loading... (Hau error)', flush=True)
+        Hau_err_ = load_complex(dataset_dir + str(d) + "/", "Hau_err_r", "Hau_err_i")
+        Hau_err[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Hau_err_)
+        print('Loading... (Har error)', flush=True)
+        Har_err_ = load_complex(dataset_dir + str(d) + "/", "Har_err_r", "Har_err_i")
+        Har_err[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Har_err_)
+        print('Loading... (Hru error)', flush=True)
+        Hru_err_ = load_complex(dataset_dir + str(d) + "/", "Hru_err_r", "Hru_err_i")
+        Hru_err[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Hru_err_)
         print('Loading... (Hau)', flush=True)
         Hau_ = load_complex(dataset_dir + str(d) + "/", "Hau_r", "Hau_i")
-        Hau[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(Hau_)
+        Hau[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Hau_)
         print('Loading... (Har)', flush=True)
         Har_ = load_complex(dataset_dir + str(d) + "/", "Har_r", "Har_i")
-        Har[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(Har_)
+        Har[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Har_)
         print('Loading... (Hru)', flush=True)
         Hru_ = load_complex(dataset_dir + str(d) + "/", "Hru_r", "Hru_i")
-        Hru[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(Hru_)
+        Hru[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Hru_)
         print('Loading... RISopt.csv', flush=True)
         RISopt_ = np.loadtxt(dataset_dir + str(d) + "/" + "RISopt.csv", delimiter=',')
-        RISopt[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(RISopt_)
+        RISopt[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(RISopt_)
         print('Loading... (wopt)', flush=True)
         wopt_ = load_complex(dataset_dir + str(d) + "/", "wopt_r", "wopt_i")
-        Wopt[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(wopt_)
+        Wopt[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(wopt_)
 
     # unvectorize by reshaping the stacked vector into Matrix along proper dimensions
+    Hau_err = torch.transpose(torch.reshape(Hau_err, (trainparams['mc_runs'], trainparams['M_AP'], trainparams['K_UE'])), 1, 2).to(device)
+    Har_err = torch.transpose(torch.reshape(Har_err, (trainparams['mc_runs'], trainparams['M_AP'], trainparams['N_RIS'])), 1, 2).to(device)
+    Hru_err = torch.transpose(torch.reshape(Hru_err, (trainparams['mc_runs'], trainparams['N_RIS'], trainparams['K_UE'])), 1, 2).to(device)
     Hau = torch.transpose(torch.reshape(Hau, (trainparams['mc_runs'], trainparams['M_AP'], trainparams['K_UE'])), 1, 2).to(device)
     Har = torch.transpose(torch.reshape(Har, (trainparams['mc_runs'], trainparams['M_AP'], trainparams['N_RIS'])), 1, 2).to(device)
     Hru = torch.transpose(torch.reshape(Hru, (trainparams['mc_runs'], trainparams['N_RIS'], trainparams['K_UE'])), 1, 2).to(device)
     RISopt = RISopt.to(device)
     Wopt = torch.transpose(torch.reshape(Wopt, (trainparams['mc_runs'], trainparams['K_UE'], trainparams['M_AP'])), 1, 2).to(device)
+
+    # Calculate CSI errors: nmse = ||H_err||^2_F / ||H||^2_F where H_err = H - H_true
+    nmse_Hau = torch.pow(torch.div(torch.linalg.matrix_norm(Hau_err, ord='fro'), torch.linalg.matrix_norm(Hau, ord='fro')), 2)
+    trainparams['nmse_Hau'] = torch.mean(nmse_Hau).item()  # average over all montecarlo runs
+    nmse_Har = torch.pow(torch.div(torch.linalg.matrix_norm(Har_err, ord='fro'), torch.linalg.matrix_norm(Har, ord='fro')), 2)
+    trainparams['nmse_Har'] = torch.mean(nmse_Har).item()
+    nmse_Hru = torch.pow(torch.div(torch.linalg.matrix_norm(Hru_err, ord='fro'), torch.linalg.matrix_norm(Hru, ord='fro')), 2)
+    trainparams['nmse_Hru'] = torch.mean(nmse_Hru).item()
 
     ################################################################################################################
     # Create the Torch Dataset
@@ -806,22 +830,32 @@ if __name__ == "__main__":
     num_test = trainparams['mc_runs'] - num_train_val
     num_train = int(trainparams['train_val_split'] * num_train_val)
     num_val = num_train_val - num_train
-    train_set = [] # [[inputs0, labels0], [inputs1, labels1], ... ]
+    train_set = []  # [[inputs0, labels0], [inputs1, labels1], ... ]
     test_set = []
     val_set = []
     for i in tqdm(range(0, trainparams['mc_runs']), disable=DISABLE_TQDM):
+        # Perfect CSI
         input = [RISopt[i],
-                 torch.real(Wopt[i,:,:]), torch.imag(Wopt[i,:,:]),
-                 torch.real(Har[i,:,:]),  torch.imag(Har[i,:,:]),
-                 torch.real(Hru[i,:,:]),  torch.imag(Hru[i,:,:]),
-                 torch.real(Hau[i,:,:]),  torch.imag(Hau[i,:,:])]
-        data = [input, RISopt[i], Wopt[i,:,:], Hau[i,:,:], Har[i,:,:], Hru[i,:,:]]
+                 torch.real(Wopt[i, :, :]), torch.imag(Wopt[i, :, :]),
+                 torch.real(Har[i, :, :]), torch.imag(Har[i, :, :]),
+                 torch.real(Hru[i, :, :]), torch.imag(Hru[i, :, :]),
+                 torch.real(Hau[i, :, :]), torch.imag(Hau[i, :, :])]
+        data = [input, RISopt[i], Wopt[i, :, :], Hau[i, :, :], Har[i, :, :], Hru[i, :, :]]
+        # Imperfect CSI
+        input_err = [RISopt[i],
+                     torch.real(Wopt[i, :, :]), torch.imag(Wopt[i, :, :]),
+                     torch.real(Har[i, :, :] + Har_err[i, :, :]), torch.imag(Har[i, :, :] + Har_err[i, :, :]),
+                     torch.real(Hru[i, :, :] + Hru_err[i, :, :]), torch.imag(Hru[i, :, :] + Hru_err[i, :, :]),
+                     torch.real(Hau[i, :, :] + Hau_err[i, :, :]), torch.imag(Hau[i, :, :] + Hau_err[i, :, :])]
+        data_err = [input, RISopt[i], Wopt[i, :, :], Hau[i, :, :] + Hau_err[i, :, :], Har[i, :, :] + Har_err[i, :, :],
+                    Hru[i, :, :] + Hru_err[i, :, :]]
+        # imperfect CSI for training and validation data, use perfect CSI for test data
         if i < num_train:
-            train_set.append(data)
+            train_set.append(data_err)
         elif i >= num_train_val:
             test_set.append(data)
         else:
-            val_set.append(data)
+            val_set.append(data_err)
     train_set = LoadData(train_set)
     test_set = LoadData(test_set)
     val_set = LoadData(val_set)
