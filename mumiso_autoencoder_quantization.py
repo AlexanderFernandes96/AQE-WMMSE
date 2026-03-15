@@ -299,7 +299,8 @@ class ACFNetCompressionNetwork(nn.Module):
             nn.ReLU(),
         )
         self.dense_layer = nn.Sequential(
-            nn.Linear(297, N_enc),
+            # nn.Linear(297, N_enc), # 297 = (100-1) * (2-1) * 3
+            nn.Linear((N_RIS-1) * 3, N_enc),
         )
     def forward(self, theta):
         theta_c = torch.exp(1j * theta) # complex
@@ -324,7 +325,8 @@ class ACFNetDecoderNetwork(nn.Module):
             nn.ReLU(),
         )
         self.dense_layer2 = nn.Sequential(
-            nn.Linear(513, 2*N_RIS),
+            # nn.Linear(513, 2*N_RIS), # 513 = (2*10-1) * (10-1) * 3
+            nn.Linear((2*trainparams['Nh_RIS']-1)*(trainparams['Nw_RIS']-1)*3, 2*N_RIS),
         )
     def forward(self, theta_qnt):
         theta_cnn = self.dense_layer1(theta_qnt)
