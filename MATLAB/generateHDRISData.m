@@ -309,7 +309,7 @@ else
         Ab = [-A, -b; -(b'), 0];
 %         R = Ab + norm(Ab,'fro')*eye(N+1); % [6]
         Abd = sort(eig(Ab), 'ascend', 'ComparisonMethod','real');
-        R = Ab + (abs(Abd(1)) + 1e-6)*eye(N+1); % [7] make all eig(R) > 0
+        R = Ab + (abs(Abd(1)) + 1e-5)*eye(N+1); % [7] make all eig(R) > 0
 
 %         v = exp(1j*2*pi*[theta(:); 0]);
         % Relax optimal v to a norm constraint then applying unit modulus
