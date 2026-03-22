@@ -11,7 +11,7 @@ job_id = str2num(getenv("SLURM_ARRAY_TASK_ID"));
 dataDir = "~/scratch/datasets/HDRISData/MUMISO/10PdBm/";
 % job_id = 0;
 % dataDir = "datasets/HDRISData/17/";
-% rng(job_id)
+rng(job_id) % generate random seed based on job_id
 dataDir = dataDir + num2str(job_id) + "/";
 mkdir(dataDir);
 fileSaveName = dataDir + "HDRISData";

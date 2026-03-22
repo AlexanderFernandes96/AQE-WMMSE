@@ -81,9 +81,9 @@ end
 % end
 
 % Large Scale Fading: Path Loss
-Hur = sqrt(g_ur)*Hur;
-Hra = sqrt(g_ra)*Hra;
-Hua = sqrt(g_ua)*Hua;
+Hur = sqrt(g_ur)*Hur/norm(Hur,2);
+Hra = sqrt(g_ra)*Hra/norm(Hra,2);
+Hua = sqrt(g_ua)*Hua/norm(Hua,2);
 
 % Channel Reciprocity
 Hru = Hur.';
