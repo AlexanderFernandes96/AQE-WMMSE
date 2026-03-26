@@ -82,7 +82,7 @@ class EncoderLayer(nn.Module):
         theta_enc = self.linear_encoder(x_in)
         return theta_enc
 
-# [1] W. Xu, L. Gan, and C. Huang, “A Robust Deep Learning-Based Beamforming Design for RIS-Assisted Multiuser MISO
+# W. Xu, L. Gan, and C. Huang, “A Robust Deep Learning-Based Beamforming Design for RIS-Assisted Multiuser MISO
 # Communications With Practical Constraints,” IEEE Trans. Cogn. Commun. Netw., vol. 8, no. 2, pp. 694–706, Jun. 2022,
 # doi: 10.1109/TCCN.2021.3128605.
 class DNN(nn.Module):
@@ -128,6 +128,14 @@ class DNN(nn.Module):
         return theta, W
 
 
+# [1] N. Shlezinger and Y. C. Eldar, “Deep task-based quantization,” Entropy, vol. 23, no. 1, pp. 1–18, Jan. 2021,
+# doi: 10.3390/e23010104.
+# [2] M. Shohat, G. Tsintsadze, N. Shlezinger, and Y. C. Eldar, “Deep Quantization for MIMO Channel Estimation,” in
+# ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), May 2019, vol.
+# 2019-May, pp. 3912–3916, doi: 10.1109/ICASSP.2019.8682704.
+# [3] N. Shlezinger, Y. C. Eldar, and M. R. D. Rodrigues, “Hardware-Limited Task-Based Quantization,” IEEE Trans. Signal
+# Process., vol. 67, no. 20, pp. 5223–5238, Oct. 2019, doi: 10.1109/TSP.2019.2935864.
+# Code: https://github.com/arielamar123/ADC-Learning-hyperopt
 class QuantizerLayer(nn.Module):
     def __init__(self, C_code_words, dev):
         super(QuantizerLayer, self).__init__()
@@ -144,11 +152,12 @@ class QuantizerLayer(nn.Module):
             data=torch.from_numpy(
                 np.delete(spacing,[0,-1])
             ), requires_grad=True)
-        c_slope = 1
+        c_slope = 1 # As c -> infinity, then: tanh -> sign. Increase this manually during training. See [2] for details.
         if len(self.b) > 1:
             self.c = torch.nn.Parameter(
                 data=torch.from_numpy(c_slope * np.ones(C_code_words - 1)),
-                requires_grad=False)
+                requires_grad=False) # When manually increasing during training, keep this as a non-trainable parameter
+                                     # so backpropagation does not update this value based on loss function
         else:
             self.b = torch.nn.Parameter(data=torch.from_numpy(np.zeros(C_code_words - 1)), requires_grad=True)
             self.c = torch.nn.Parameter(
@@ -206,6 +215,7 @@ class DecoderLayer(nn.Module):
         return theta_out
 
 
+# WMMSE beamforming updater module
 class WupdateLayer(nn.Module):
     def __init__(self, K_UE, M_AP):
         super(WupdateLayer, self).__init__()
@@ -239,7 +249,7 @@ class WupdateLayer(nn.Module):
 
     def forward(self, theta, x):
         # Solving optimal wmmse parameters with deep learning inspired by:
-        #  [1] W. Xia, G. Zheng, Y. Zhu, J. Zhang, J. Wang, and A. P. Petropulu, “A deep learning framework for
+        #  W. Xia, G. Zheng, Y. Zhu, J. Zhang, J. Wang, and A. P. Petropulu, “A deep learning framework for
         #  optimization of MISO downlink beamforming,” IEEE Trans. Commun., vol. 68, no. 3, pp. 1866–1880, Mar. 2020,
         #  doi: 10.1109/TCOMM.2019.2960361.
 
@@ -287,7 +297,7 @@ class WupdateLayer(nn.Module):
 
         return Wr_out, Wi_out
 
-# [1] Z. Li, H. Shen, W. Xu, D. Chen, and C. Zhao, “Deep Learning-Based Adaptive Phase Shift Compression and Feedback in
+# Z. Li, H. Shen, W. Xu, D. Chen, and C. Zhao, “Deep Learning-Based Adaptive Phase Shift Compression and Feedback in
 # IRS-Assisted Communication Systems,” IEEE Wirel. Commun. Lett., vol. 13, no. 3, pp. 766–770, 2024,
 # doi: 10.1109/LWC.2023.3342900.
 class ACFNetCompressionNetwork(nn.Module):
@@ -341,9 +351,9 @@ class ACFNetDecoderNetwork(nn.Module):
         theta_out = torch.angle(theta_c)
         return theta_out
 
-# Inspired by: N. Shlezinger and Y. C. Eldar, “Deep task-based quantization,” Entropy, vol. 23, no. 1, pp. 1–18, Jan.
-# 2021, doi: 10.3390/e23010104.
-# Code: https://github.com/arielamar123/ADC-Learning-hyperopt
+# The proposed Auto-Quantization-Encoder Weighted Minimum Mean Square Error (AQE-WMMSE) deep learning architecture that
+# updates the beamformer based on the compressed phase shifts. Results show that having the WMMSE module (WupdateLayer)
+# significantly increases compression performance of the AQE phase shift compression module.
 class AutoQEncoderWMMSE(nn.Module):
     def __init__(self, K_UE, M_AP, N_RIS, Nc_enc, C_code_words, dev):
         super(AutoQEncoderWMMSE, self).__init__()
@@ -362,6 +372,7 @@ class AutoQEncoderWMMSE(nn.Module):
         theta_out, W_out = normalizethetaW(theta_dec, W)
         return theta_out.double(), W_out.cdouble()
 
+# Benchmark: the Auto-Quantization-Encoder that only compresses phase shifts (no WMMSE beamforming module)
 class AutoQEncoderNoWupdate(nn.Module):
     def __init__(self, K_UE, M_AP, N_RIS, Nc_enc, C_code_words, dev):
         super(AutoQEncoderNoWupdate, self).__init__()
@@ -379,7 +390,7 @@ class AutoQEncoderNoWupdate(nn.Module):
         theta_out, W_out = normalizethetaW(theta_dec, W)
         return theta_out.double(), W_out.cdouble()
 
-# [1] W. Xu, L. Gan, and C. Huang, “A Robust Deep Learning-Based Beamforming Design for RIS-Assisted Multiuser MISO
+# W. Xu, L. Gan, and C. Huang, “A Robust Deep Learning-Based Beamforming Design for RIS-Assisted Multiuser MISO
 # Communications With Practical Constraints,” IEEE Trans. Cogn. Commun. Netw., vol. 8, no. 2, pp. 694–706, Jun. 2022,
 # doi: 10.1109/TCCN.2021.3128605.
 class DQNN(nn.Module):
@@ -396,7 +407,7 @@ class DQNN(nn.Module):
         theta_out, W_out = normalizethetaW(theta_qnt, W)
         return theta_out.double(), W_out.cdouble()
 
-# [1] Z. Li, H. Shen, W. Xu, D. Chen, and C. Zhao, “Deep Learning-Based Adaptive Phase Shift Compression and Feedback in
+# Z. Li, H. Shen, W. Xu, D. Chen, and C. Zhao, “Deep Learning-Based Adaptive Phase Shift Compression and Feedback in
 # IRS-Assisted Communication Systems,” IEEE Wirel. Commun. Lett., vol. 13, no. 3, pp. 766–770, 2024,
 # doi: 10.1109/LWC.2023.3342900.
 class ACFNet(nn.Module):
@@ -417,7 +428,15 @@ class ACFNet(nn.Module):
         theta_out, W_out = normalizethetaW(theta_dec, W)
         return theta_out.double(), W_out.cdouble()
 
-
+# The linQ benchmark that quantizes the phase shifts and updates the beamformer with single linear layers
+# Inspired by and adapted to the RIS system model as a benchmark from:
+# [1] N. Shlezinger and Y. C. Eldar, “Deep task-based quantization,” Entropy, vol. 23, no. 1, pp. 1–18, Jan. 2021,
+# doi: 10.3390/e23010104.
+# [2] M. Shohat, G. Tsintsadze, N. Shlezinger, and Y. C. Eldar, “Deep Quantization for MIMO Channel Estimation,” in
+# ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), May 2019, vol.
+# 2019-May, pp. 3912–3916, doi: 10.1109/ICASSP.2019.8682704.
+# [3] N. Shlezinger, Y. C. Eldar, and M. R. D. Rodrigues, “Hardware-Limited Task-Based Quantization,” IEEE Trans. Signal
+# Process., vol. 67, no. 20, pp. 5223–5238, Oct. 2019, doi: 10.1109/TSP.2019.2935864.
 class LinearQuantizer(nn.Module):
     def __init__(self, K_UE, M_AP, N_RIS, Nc_enc, C_code_words, dev):
         super(LinearQuantizer, self).__init__()
@@ -511,7 +530,7 @@ class Trainer(object):
         val_loss_min = np.inf
         val_loss_min_earlystop = np.inf
 
-        model_validated = deepcopy(self.model)  # if val loss does not decrease, return the copy of AQEWMMSEnet before training
+        model_validated = deepcopy(self.model)  # if val loss does not decrease, return the copy of model before training
         train_losses = []
         val_losses = []
         num_epochs = 0
@@ -524,16 +543,16 @@ class Trainer(object):
             self.model.train()
             with torch.enable_grad():
                 try:
-                    self.model.quantizer_layer.hardQ = False
+                    self.model.quantizer_layer.hardQ = False                # quantization layer = tanh
                     self.model.quantizer_layer.c *= 1.005                   # increment c = c * 1.005 every epoch
                 except AttributeError:
                     self.model.module.quantizer_layer.hardQ = False
                 for i, data in (enumerate(self.train_loader)):
                     input, theta_opt, Wopt, Hau, Har, Hru = data
                     self.optimizer.zero_grad()                              # clear gradients of all variables to optimize
-                    theta_out, W_out = self.model(input)                    # forward pass inputs into network
+                    theta_out, W_out = self.model(input)                    # forward pass inputs into model
                     loss = Loss(theta_out, W_out, Hau, Har, Hru)            # calculate batch loss
-                    loss.backward()                                         # back propagate gradients through AQE network
+                    loss.backward()                                         # back propagate gradients through model
                     self.optimizer.step()                                   # single optimization step to update variables
                     # self.scheduler.step()                                 # One Cycle LR adjust learning rate each step
                     train_loss += loss.item()                               # update training loss
@@ -543,15 +562,14 @@ class Trainer(object):
             # Validate the model
             self.model.eval()
             with torch.no_grad():
-                # replace trainable tanh quantization layer with proper quantization layer
                 try:
-                    self.model.quantizer_layer.hardQ = True
+                    self.model.quantizer_layer.hardQ = True             # quantization layer = sign
                 except AttributeError:
                     self.model.module.quantizer_layer.hardQ = True
 
                 for i, data in (enumerate(val_loader)):
                     input, theta_opt, Wopt, Hau, Har, Hru = data
-                    theta_out, W_out = self.model(input)                # forward pass inputs into AQE network
+                    theta_out, W_out = self.model(input)                # forward pass inputs into model
                     loss = Loss(theta_out, W_out, Hau, Har, Hru)        # calculate batch loss
                     val_loss += loss.item()                             # update validation loss
                     val_loss /= len(val_loader.dataset)                 # normalize validation loss
@@ -571,7 +589,7 @@ class Trainer(object):
                         print('### Validation loss same/decreased ({:.10f} --> {:.10f})... saving model. ###'.format(
                             val_loss_min, val_loss), flush=True)
                     val_loss_min = val_loss
-                    model_validated = deepcopy(self.model) # if val loss does not decrease, return the copy of AQEWMMSEnet before training
+                    model_validated = deepcopy(self.model) # if val loss does not decrease, return the copy of model before training
 
                 running_loss += val_loss
                 if epoch % trainparams['epoch_val'] == trainparams['epoch_val']-1:
@@ -584,7 +602,6 @@ class Trainer(object):
                         if trainparams['epoch_echo']:
                             print('No Validation early stop loss decrease ({:.10f} --> {:.10f}). Early Stopping'.format(
                             val_loss_min_earlystop, running_loss), flush=True)
-                        # break # early stopping by breaking out of epoch training for loop
                     running_loss = 0.0
 
                 train_losses.append(train_loss)
@@ -602,9 +619,8 @@ class Trainer(object):
         test_size = len(test_loader.dataset.data)
         self.model.eval()
         with torch.no_grad():
-            # replace trainable tanh quantization layer with sign quantization layer
             try:
-                self.model.quantizer_layer.hardQ = True
+                self.model.quantizer_layer.hardQ = True     # quantization layer = sign
             except AttributeError:
                 self.model.module.quantizer_layer.hardQ = True
 
@@ -691,18 +707,15 @@ if __name__ == "__main__":
     ################################################################################################################################################
 
     PdBm_list = ['10PdBm', '15PdBm', '20PdBm', '25PdBm', '30PdBm', '35PdBm', '40PdBm']
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 1: # script can be run in parallel with multiple job ids, this selects PdBm based on the job_id
         PdBm_dir = PdBm_list[int(sys.argv[1])]
     else:
-        PdBm_dir = '40PdBm'
+        PdBm_dir = '40PdBm' # otherwise default to using this parameter
 
-    path_dir = "~/scratch/"
-    # path_dir = "MATLAB/"
+    path_dir = "~/scratch/" # main path directory to read data and log files
     trial = "CSIerr0/repeated_trial_00/00" # trial number for logging results
-    dataset_dir = path_dir + "datasets/HDRISData/MUMISO_CSIerr0/" + PdBm_dir + "/"
-    results_dir = path_dir + "logs/MU-MISO_AchievableRateExperiments/" + trial + "/" + PdBm_dir + "/"
-    # if len(sys.argv) > 1:
-    #     results_dir = results_dir + sys.argv[1] + "/"
+    dataset_dir = path_dir + "datasets/HDRISData/MUMISO_CSIerr0/" + PdBm_dir + "/" # load .csv files generated from MATLAB scripts
+    results_dir = path_dir + "logs/MU-MISO_AchievableRateExperiments/" + trial + "/" + PdBm_dir + "/" # dir for outputs, loss curves, etc.
     results_file = "results.csv"
     trainparams_file = "trainparams.csv"
 
@@ -734,11 +747,12 @@ if __name__ == "__main__":
                   'epoch_echo': True, # flag to display epoch print losses
                   # 'step_size': 10, # step size for scheduler optimizer
                   # 'Nc_enc': 100, # number of quantizers, values that N is compressed/encoded into
-                  'Q_bits': 1, # number of bits of a quantizer
+                  'Q_bits': 1, # number of bits of the scalar quantizer
                   # 'max_lr': 1, # maximum learning rate for Scheduler
                   }
 
-    Nc_array = 10 * np.array(range(1,11))
+    # Number of parallel nodes going into the scalar quantizer. Eg. Total number of bits = Nc * Q_bits
+    Nc_array = 10 * np.array(range(1,11)) # This is the same as: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
     ####################################################################################################################
     # Load RIS data from .csv files
@@ -767,8 +781,7 @@ if __name__ == "__main__":
     # Har = (N, M)    AP  -> RIS
     # Hru = (K, N)    RIS -> UE
     # W   = (M, K)    UE stream -> AP
-    Hau_err = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['M_AP'],
-                          dtype=torch.cdouble)  # CSI errors
+    Hau_err = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['M_AP'], dtype=torch.cdouble)
     Har_err = torch.zeros(trainparams['mc_runs'], trainparams['N_RIS'] * trainparams['M_AP'], dtype=torch.cdouble)
     Hru_err = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['N_RIS'], dtype=torch.cdouble)
     Hau = torch.zeros(trainparams['mc_runs'], trainparams['K_UE'] * trainparams['M_AP'], dtype=torch.cdouble)
@@ -780,15 +793,19 @@ if __name__ == "__main__":
     for d in range(num_dirs):
         print(dataset_dir + str(d) + "/", flush=True)
         sp = pd.read_csv(dataset_dir + str(d) + "/" + "systemModelParameters.csv").iloc[0]
-        print('Loading... (Hau error)', flush=True)
-        Hau_err_ = load_complex(dataset_dir + str(d) + "/", "Hau_err_r", "Hau_err_i")
-        Hau_err[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Hau_err_)
-        print('Loading... (Har error)', flush=True)
-        Har_err_ = load_complex(dataset_dir + str(d) + "/", "Har_err_r", "Har_err_i")
-        Har_err[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Har_err_)
-        print('Loading... (Hru error)', flush=True)
-        Hru_err_ = load_complex(dataset_dir + str(d) + "/", "Hru_err_r", "Hru_err_i")
-        Hru_err[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Hru_err_)
+        print("CH_err:", sysmodelparams['CH_err'], flush=True)
+        if float(sysmodelparams['CH_err']) == 0:
+            print("Perfect CSI", flush=True)
+        else:
+            print('Loading... (Hau error)', flush=True)
+            Hau_err_ = load_complex(dataset_dir + str(d) + "/", "Hau_err_r", "Hau_err_i")
+            Hau_err[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(Hau_err_)
+            print('Loading... (Har error)', flush=True)
+            Har_err_ = load_complex(dataset_dir + str(d) + "/", "Har_err_r", "Har_err_i")
+            Har_err[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(Har_err_)
+            print('Loading... (Hru error)', flush=True)
+            Hru_err_ = load_complex(dataset_dir + str(d) + "/", "Hru_err_r", "Hru_err_i")
+            Hru_err[d*int(sp['mc_runs']):(d+1)*int(sp['mc_runs']), :] = torch.from_numpy(Hru_err_)
         print('Loading... (Hau)', flush=True)
         Hau_ = load_complex(dataset_dir + str(d) + "/", "Hau_r", "Hau_i")
         Hau[d * int(sp['mc_runs']):(d + 1) * int(sp['mc_runs']), :] = torch.from_numpy(Hau_)
@@ -817,7 +834,7 @@ if __name__ == "__main__":
 
     # Calculate CSI errors: nmse = ||H_err||^2_F / ||H||^2_F where H_err = H - H_true
     nmse_Hau = torch.pow(torch.div(torch.linalg.matrix_norm(Hau_err, ord='fro'), torch.linalg.matrix_norm(Hau, ord='fro')), 2)
-    trainparams['nmse_Hau'] = torch.mean(nmse_Hau).item()  # average over all montecarlo runs
+    trainparams['nmse_Hau'] = torch.mean(nmse_Hau).item() # average over all montecarlo runs
     nmse_Har = torch.pow(torch.div(torch.linalg.matrix_norm(Har_err, ord='fro'), torch.linalg.matrix_norm(Har, ord='fro')), 2)
     trainparams['nmse_Har'] = torch.mean(nmse_Har).item()
     nmse_Hru = torch.pow(torch.div(torch.linalg.matrix_norm(Hru_err, ord='fro'), torch.linalg.matrix_norm(Hru, ord='fro')), 2)
@@ -833,26 +850,29 @@ if __name__ == "__main__":
     num_test = trainparams['mc_runs'] - num_train_val
     num_train = int(trainparams['train_val_split'] * num_train_val)
     num_val = num_train_val - num_train
-    train_set = []  # [[inputs0, labels0], [inputs1, labels1], ... ]
+    train_set = [] # [[inputs0, labels0], [inputs1, labels1], ... ]
     test_set = []
     val_set = []
     for i in tqdm(range(0, trainparams['mc_runs']), disable=DISABLE_TQDM):
         # Perfect CSI
         input = [RISopt[i],
-                 torch.real(Wopt[i, :, :]), torch.imag(Wopt[i, :, :]),
-                 torch.real(Har[i, :, :]), torch.imag(Har[i, :, :]),
-                 torch.real(Hru[i, :, :]), torch.imag(Hru[i, :, :]),
-                 torch.real(Hau[i, :, :]), torch.imag(Hau[i, :, :])]
-        data = [input, RISopt[i], Wopt[i, :, :], Hau[i, :, :], Har[i, :, :], Hru[i, :, :]]
+                 torch.real(Wopt[i,:,:]), torch.imag(Wopt[i,:,:]),
+                 torch.real(Har[i,:,:]),  torch.imag(Har[i,:,:]),
+                 torch.real(Hru[i,:,:]),  torch.imag(Hru[i,:,:]),
+                 torch.real(Hau[i,:,:]),  torch.imag(Hau[i,:,:])]
+        data = [input, RISopt[i], Wopt[i,:,:], Hau[i,:,:], Har[i,:,:], Hru[i,:,:]]
         # Imperfect CSI
-        input_err = [RISopt[i],
-                     torch.real(Wopt[i, :, :]), torch.imag(Wopt[i, :, :]),
-                     torch.real(Har[i, :, :] + Har_err[i, :, :]), torch.imag(Har[i, :, :] + Har_err[i, :, :]),
-                     torch.real(Hru[i, :, :] + Hru_err[i, :, :]), torch.imag(Hru[i, :, :] + Hru_err[i, :, :]),
-                     torch.real(Hau[i, :, :] + Hau_err[i, :, :]), torch.imag(Hau[i, :, :] + Hau_err[i, :, :])]
-        data_err = [input, RISopt[i], Wopt[i, :, :], Hau[i, :, :] + Hau_err[i, :, :], Har[i, :, :] + Har_err[i, :, :],
-                    Hru[i, :, :] + Hru_err[i, :, :]]
-        # imperfect CSI for training and validation data, use perfect CSI for test data
+        if float(sysmodelparams['CH_err']) == 0:
+            input_err = input
+            data_err = data
+        else:
+            input_err = [RISopt[i],
+                         torch.real(Wopt[i,:,:]), torch.imag(Wopt[i,:,:]),
+                         torch.real(Har[i,:,:] + Har_err[i,:,:]),  torch.imag(Har[i,:,:] + Har_err[i,:,:]),
+                         torch.real(Hru[i,:,:] + Hru_err[i,:,:]),  torch.imag(Hru[i,:,:] + Hru_err[i,:,:]),
+                         torch.real(Hau[i,:,:] + Hau_err[i,:,:]),  torch.imag(Hau[i,:,:] + Hau_err[i,:,:])]
+            data_err = [input, RISopt[i], Wopt[i,:,:], Hau[i,:,:] + Hau_err[i,:,:], Har[i,:,:] + Har_err[i,:,:], Hru[i,:,:] + Hru_err[i,:,:]]
+        # Use imperfect CSI for training and validation data, use perfect CSI for test data
         if i < num_train:
             train_set.append(data_err)
         elif i >= num_train_val:
