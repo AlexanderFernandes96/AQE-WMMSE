@@ -856,22 +856,24 @@ if __name__ == "__main__":
     for i in tqdm(range(0, trainparams['mc_runs']), disable=DISABLE_TQDM):
         # Perfect CSI
         input = [RISopt[i],
-                 torch.real(Wopt[i,:,:]), torch.imag(Wopt[i,:,:]),
-                 torch.real(Har[i,:,:]),  torch.imag(Har[i,:,:]),
-                 torch.real(Hru[i,:,:]),  torch.imag(Hru[i,:,:]),
-                 torch.real(Hau[i,:,:]),  torch.imag(Hau[i,:,:])]
-        data = [input, RISopt[i], Wopt[i,:,:], Hau[i,:,:], Har[i,:,:], Hru[i,:,:]]
+                 torch.real(Wopt[i, :, :]), torch.imag(Wopt[i, :, :]),
+                 torch.real(Har[i, :, :]), torch.imag(Har[i, :, :]),
+                 torch.real(Hru[i, :, :]), torch.imag(Hru[i, :, :]),
+                 torch.real(Hau[i, :, :]), torch.imag(Hau[i, :, :])]
+        data = [input, RISopt[i], Wopt[i, :, :], Hau[i, :, :], Har[i, :, :], Hru[i, :, :]]
         # Imperfect CSI
         if float(sysmodelparams['CH_err']) == 0:
             input_err = input
             data_err = data
         else:
             input_err = [RISopt[i],
-                         torch.real(Wopt[i,:,:]), torch.imag(Wopt[i,:,:]),
-                         torch.real(Har[i,:,:] + Har_err[i,:,:]),  torch.imag(Har[i,:,:] + Har_err[i,:,:]),
-                         torch.real(Hru[i,:,:] + Hru_err[i,:,:]),  torch.imag(Hru[i,:,:] + Hru_err[i,:,:]),
-                         torch.real(Hau[i,:,:] + Hau_err[i,:,:]),  torch.imag(Hau[i,:,:] + Hau_err[i,:,:])]
-            data_err = [input, RISopt[i], Wopt[i,:,:], Hau[i,:,:] + Hau_err[i,:,:], Har[i,:,:] + Har_err[i,:,:], Hru[i,:,:] + Hru_err[i,:,:]]
+                         torch.real(Wopt[i, :, :]), torch.imag(Wopt[i, :, :]),
+                         torch.real(Har[i, :, :] + Har_err[i, :, :]), torch.imag(Har[i, :, :] + Har_err[i, :, :]),
+                         torch.real(Hru[i, :, :] + Hru_err[i, :, :]), torch.imag(Hru[i, :, :] + Hru_err[i, :, :]),
+                         torch.real(Hau[i, :, :] + Hau_err[i, :, :]), torch.imag(Hau[i, :, :] + Hau_err[i, :, :])]
+            data_err = [input_err, RISopt[i], Wopt[i, :, :], Hau[i, :, :] + Hau_err[i, :, :],
+                        Har[i, :, :] + Har_err[i, :, :], Hru[i, :, :] + Hru_err[i, :, :]]
+            data = [input_err, RISopt[i], Wopt[i, :, :], Hau[i, :, :], Har[i, :, :], Hru[i, :, :]]
         # Use imperfect CSI for training and validation data, use perfect CSI for test data
         if i < num_train:
             train_set.append(data_err)
